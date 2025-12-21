@@ -69,6 +69,55 @@ fi
 EOF
 fi
 
+
+# -------------------------------------------------
+# SSH key setup (ed25519, passphrase-protected)
+# -------------------------------------------------
+log "Setting up SSH keys"
+
+SSH_KEY="$HOME/.ssh/id_ed25519"
+
+mkdir -p "$HOME/.ssh"
+chmod 700 "$HOME/.ssh"
+
+if [[ ! -f "$SSH_KEY" ]]; then
+  echo
+  echo "No SSH key found."
+  echo "You will now be prompted to create one (with a passphrase)."
+  echo
+
+  ssh-keygen -t ed25519 -a 100 -f "$SSH_KEY"
+
+  echo
+  echo "SSH key created:"
+  echo "  Public key: $SSH_KEY.pub"
+else
+  log "SSH key already exists: $SSH_KEY"
+fi
+
+# Start ssh-agent if not running
+if ! pgrep -u "$USER" ssh-agent >/dev/null; then
+  eval "$(ssh-agent -s)"
+fi
+
+# Add key to agent (will prompt for passphrase)
+ssh-add "$SSH_KEY" || true
+
+# Persist ssh-agent usage across shells
+for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+  touch "$rc"
+  if ! grep -q "ssh-agent -s" "$rc"; then
+    cat >> "$rc" <<'EOF'
+
+# --- SSH agent auto-start ---
+if [ -z "$SSH_AUTH_SOCK" ]; then
+  eval "$(ssh-agent -s)" >/dev/null
+fi
+EOF
+  fi
+done
+
+
 # -------------------------------------------------
 # VS Code (Mint-safe, NO SNAP)
 # -------------------------------------------------
