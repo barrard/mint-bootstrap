@@ -272,12 +272,8 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
 
 npm i -g @openai/codex
-npm install -g @google/gemini-cli
-
-if ! require_cmd claude; then
-  log "Installing Claude Code CLI"
-  curl -fsSL https://claude.ai/install.sh | zsh
-fi
+npm i -g @google/gemini-cli
+npm i -g @anthropic-ai/claude-code
 
 # -------------------------------------------------
 # Summary
