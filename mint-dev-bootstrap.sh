@@ -33,8 +33,6 @@ sudo apt-get install -y \
 # -------------------------------------------------
 log "Installing zsh"
 sudo apt-get install -y zsh
-ZSH_PATH="$(command -v zsh)"
-chsh -s "$ZSH_PATH"
 
 if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
   log "Installing Oh My Zsh"
@@ -42,9 +40,9 @@ if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
 fi
 
-# Ensure ~/.zshrc exists and loads OMZ
+# Create .zshrc if needed
 if [[ ! -f "$HOME/.zshrc" ]] || ! grep -q "oh-my-zsh.sh" "$HOME/.zshrc"; then
-  log "Fixing ~/.zshrc to load Oh My Zsh"
+  log "Creating ~/.zshrc"
   cat > "$HOME/.zshrc" <<'EOF'
 export ZSH="$HOME/.oh-my-zsh"
 ZSH_THEME="robbyrussell"
@@ -54,7 +52,7 @@ EOF
 fi
 
 # Mint/GNOME terminal sometimes forces bash; ensure new terminals land in zsh
-log "Ensuring new terminals start zsh even if bash is forced"
+log "Configuring bashrc to auto-switch to zsh"
 touch "$HOME/.bashrc"
 if ! grep -q "__AUTO_ZSH_DONE" "$HOME/.bashrc"; then
   cat >> "$HOME/.bashrc" <<'EOF'
@@ -69,6 +67,12 @@ fi
 EOF
 fi
 
+# Change default shell (will take effect on next login)
+ZSH_PATH="$(command -v zsh)"
+if [[ "$(getent passwd "$USER" | cut -d: -f7)" != "$ZSH_PATH" ]]; then
+  log "Setting zsh as default shell (requires password)"
+  chsh -s "$ZSH_PATH"
+fi
 
 # -------------------------------------------------
 # SSH key setup (ed25519, passphrase-protected)
@@ -117,7 +121,6 @@ EOF
   fi
 done
 
-
 # -------------------------------------------------
 # VS Code (Mint-safe, NO SNAP)
 # -------------------------------------------------
@@ -139,12 +142,30 @@ require_cmd code || die "`code` command missing after install"
 # nvm + latest Node LTS
 # -------------------------------------------------
 log "Installing nvm + Node LTS"
+
+# Install nvm if not present
 if [[ ! -d "$HOME/.nvm" ]]; then
   curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash
 fi
+
+# Add nvm to both bashrc and zshrc if not already there
+for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+  touch "$rc"
+  if ! grep -q 'NVM_DIR' "$rc"; then
+    cat >> "$rc" <<'EOF'
+
+# --- NVM setup ---
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+EOF
+  fi
+done
+
+# Load nvm in current bash session to install Node
 export NVM_DIR="$HOME/.nvm"
 # shellcheck disable=SC1091
-source "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
 
 nvm install --lts
 nvm alias default 'lts/*'
@@ -244,6 +265,12 @@ sudo systemctl enable --now auditd || true
 # AI CLIs
 # -------------------------------------------------
 log "Installing AI CLIs"
+
+# Make sure we have Node/npm loaded
+export NVM_DIR="$HOME/.nvm"
+# shellcheck disable=SC1091
+[ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+
 npm install -g @openai/codex
 npm install -g @google/gemini-cli
 
@@ -256,17 +283,19 @@ fi
 # -------------------------------------------------
 log "Bootstrap complete"
 echo
-echo "Open a NEW terminal tab/window. It should land in zsh + Oh My Zsh."
+echo "=========================================="
+echo "IMPORTANT: Log out and log back in for zsh to become your default shell."
+echo "=========================================="
 echo
-echo "Verify shell:"
-echo "  echo \$0"
-echo "  ps -p \$\$ -o comm="
+echo "After logging back in, verify:"
+echo "  echo \$0                    # Should show 'zsh' or '-zsh'"
+echo "  ps -p \$\$ -o comm=          # Should show 'zsh'"
 echo
-echo "Verify VS Code:"
-echo "  code ."
-echo
-echo "Firewall status:"
-echo "  sudo ufw status"
+echo "Other checks:"
+echo "  code .                      # Launch VS Code"
+echo "  node --version              # Check Node.js"
+echo "  sudo ufw status             # Check firewall"
 echo
 echo "To issue a Let's Encrypt cert (once DNS points to this box):"
 echo "  sudo certbot --apache -d yourdomain.com -d www.yourdomain.com"
+echo
